@@ -5,7 +5,7 @@ public class PaymentManager {
     public boolean processPayment(PaymentRequest request) {
         PaymentProcessor processor;
 
-        switch (request.getProvider().toLowerCase()) {
+        switch (request.getProvider()) {
             case "paypal":
                 processor = new PaypalPaymentProcessor(new PaypalGateway());
                 break;

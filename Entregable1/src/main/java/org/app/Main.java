@@ -12,23 +12,23 @@ public class Main {
         // Datos del pago
         System.out.println("Ingrese el monto a pagar:");
         double amount = scanner.nextDouble();
-        scanner.nextLine(); // limpiar buffer
+        scanner.nextLine();
 
-        System.out.println("Seleccione el proveedor de pago (paypal o mercadopago):");
+        System.out.println("Ingrese el proveedor de pago (paypal o mercadopago):");
         String provider = scanner.nextLine().toLowerCase();
 
         // Datos del envío
-        System.out.println("Ingrese el peso del paquete:");
+        System.out.println("Ingrese el peso del paquete (en kg):");
         double weight = scanner.nextDouble();
 
-        System.out.println("Ingrese ancho:");
+        System.out.println("Ingrese ancho (en cm):");
         double width = scanner.nextDouble();
-        System.out.println("Ingrese alto:");
+        System.out.println("Ingrese alto (en cm):");
         double height = scanner.nextDouble();
-        System.out.println("Ingrese largo:");
+        System.out.println("Ingrese largo (en cm):");
         double length = scanner.nextDouble();
 
-        scanner.nextLine(); // limpiar buffer
+        scanner.nextLine();
 
         System.out.println("Ingrese origen:");
         String origin = scanner.nextLine();
@@ -36,18 +36,11 @@ public class Main {
         System.out.println("Ingrese destino:");
         String destination = scanner.nextLine();
 
-        System.out.println("Seleccione el método de envío (air, truck, boat):");
+        System.out.println("Ingrese el metodo de envio (air, truck, boat):");
         String shippingMethod = scanner.nextLine().toLowerCase();
 
-        // Armar futures en paralelo
-        CompletableFuture<Void> paymentFuture = CompletableFuture.runAsync(() -> {
-            PaymentRequest request = new PaymentRequest(amount);
-            PaymentManager paymentManager = new PaymentManager();
-            paymentManager.processPayment(request, provider);
-        });
-
-        CompletableFuture<Void> shippingFuture = CompletableFuture.runAsync(() -> {
-            Dimensions dimensions = new Dimensions(width, height, length);
+        CompletableFuture<Double> shippingCostFuture = CompletableFuture.supplyAsync(() -> {
+            Dimensions dimensions = new Dimensions(height, width, length);
             ShippingStrategy strategy;
 
             switch (shippingMethod) {
@@ -61,18 +54,24 @@ public class Main {
                     strategy = new BoatShippingStrategy();
                     break;
                 default:
-                    throw new IllegalArgumentException("Método de envío no válido");
+                    throw new IllegalArgumentException("Metodo invalido");
             }
 
-            ShippingCalculator calculator = new ShippingCalculator(weight, dimensions, origin, destination, strategy);
+            ShippingRequest shippingRequest = new ShippingRequest(weight, dimensions, origin, destination);
+            ShippingCalculator calculator = new ShippingCalculator(shippingRequest, strategy);
             double cost = calculator.calculateCost();
-            System.out.println("Costo de envío: $" + cost);
+            System.out.println("Costo de envio: $" + cost);
+            return cost;
         });
 
-        // Esperar a que terminen ambos
-        CompletableFuture<Void> combined = CompletableFuture.allOf(paymentFuture, shippingFuture);
-        combined.join();
+        CompletableFuture<Void> paymentFuture = shippingCostFuture.thenAcceptAsync(shippingCost -> {
+            double totalAmount = amount + shippingCost;
+            PaymentRequest paymentRequest = new PaymentRequest(totalAmount, provider);
+            PaymentManager paymentManager = new PaymentManager();
+            paymentManager.processPayment(paymentRequest);
+        });
 
-        System.out.println("Proceso completado.");
+        paymentFuture.join();
+        System.out.println("Pago y envio completados.");
     }
 }
